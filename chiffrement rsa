@@ -1,0 +1,135 @@
+library IEEE;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.NUMERIC_STD.ALL;
+
+entity testx is
+    port (
+        message   : in  std_logic_vector(87 downto 0);  -- 11 characters * 8 bits
+        p         : in  unsigned(7 downto 0);
+        q         : in  unsigned(7 downto 0);
+        n         : buffer unsigned(15 downto 0);
+        phi_n     : buffer unsigned(15 downto 0);
+        e         : buffer unsigned(7 downto 0);
+        d         : buffer unsigned(7 downto 0);
+        resultat  : out std_logic_vector(87 downto 0)  -- Encrypted message
+    );
+end entity testx;
+
+architecture behavioral of testx is
+
+    function gcd(a, b : integer) return integer is
+        variable temp_a : integer := a;
+        variable temp_b : integer := b;
+    begin
+        for i in 1 to 100 loop
+            if temp_a = 0 then
+                return temp_b;
+            elsif temp_b = 0 then
+                return temp_a;
+            elsif temp_a < temp_b then
+                temp_b := temp_b - temp_a;
+            else
+                temp_a := temp_a - temp_b;
+            end if;
+        end loop;
+        return -1; -- Indication d'un dépassement de la limite d'itération
+    end function;
+
+function mod_inverse(a : integer; m : integer) return integer is
+    variable y : integer := 0;
+    variable x : integer := 1;
+    variable m0 : integer := m;
+    variable a_temp : integer := a;
+    variable iteration_count : integer := 0;  -- Compteur d'itérations
+begin
+    while a_temp > 1 loop
+        iteration_count := iteration_count + 1;  -- Incrémenter le compteur d'itérations
+        if iteration_count > 100 then  -- Vérifier si le nombre d'itérations a atteint la limite
+            return -1;  -- Indication d'un dépassement de la limite d'itération
+        end if;
+
+        y := x - (a_temp / m) * y;
+        x := y + x;
+        a_temp := m0 - (m0 / a_temp) * (m0 mod a_temp);
+        m0 := a_temp;
+    end loop;
+    if x < 0 then
+        x := x + m;
+    end if;
+    return x;
+end function;
+
+function mod_exp(base : integer; exponent : integer; modulus : integer) return integer is
+    variable result : integer := 1;
+    variable b : integer := base mod modulus;
+    variable e : integer := exponent;
+    variable iteration_count : integer := 0;  -- Compteur d'itérations
+begin
+    while e > 0 loop
+        iteration_count := iteration_count + 1;  -- Incrémenter le compteur d'itérations
+        if iteration_count > 100 then  -- Vérifier si le nombre d'itérations a atteint la limite
+            return -1;  -- Indication d'un dépassement de la limite d'itération
+        end if;
+
+        if (e mod 2) = 1 then
+            result := (result * b) mod modulus;
+        end if;
+        e := e / 2;
+        b := (b * b) mod modulus;
+    end loop;
+
+    return result;
+end function;
+begin
+
+    process(p, q, message)
+    variable temp_p : integer;
+    variable temp_q : integer;
+    variable temp_n : integer;
+    variable temp_phi_n : integer;
+    variable temp_e : integer := -1; -- Initialisation avec une valeur par défaut
+    variable temp_d : integer;
+    variable temp_m : integer;
+    variable temp_x : integer;
+    variable temp_result : std_logic_vector(87 downto 0);
+begin
+    temp_p := to_integer(p);
+    temp_q := to_integer(q);
+
+    temp_n := temp_p * temp_q;
+    temp_phi_n := (temp_p - 1) * (temp_q - 1);
+
+    n <= to_unsigned(temp_n, 16);
+    phi_n <= to_unsigned(temp_phi_n, 16);
+
+    -- Trouver e, un nombre premier avec phi(n)
+    for i in 2 to 1000 loop
+        if gcd(i, temp_phi_n) = 1 then
+            temp_e := i;
+            exit;
+        end if;
+    end loop;
+
+    if temp_e = -1 then
+        -- Aucun nombre premier trouvé, gérer l'erreur
+        -- Vous pouvez choisir une autre valeur par défaut ou signaler une erreur
+        null;
+    else
+        e <= to_unsigned(temp_e, 8);
+
+        -- Calculer l'inverse modulaire d
+        temp_d := mod_inverse(temp_e, temp_phi_n);
+        d <= to_unsigned(temp_d, 8);
+
+        -- Chiffrer le message
+        for i in 0 to 10 loop
+            temp_m := to_integer(unsigned(message(87 - 8*i downto 80 - 8*i)));
+            temp_x := mod_exp(temp_m, temp_e, temp_n);
+            temp_result(87 - 8*i downto 80 - 8*i) := std_logic_vector(to_unsigned(temp_x, 8));
+        end loop;
+
+        resultat <= temp_result;
+    end if;
+end process;
+
+end architecture behavioral;
